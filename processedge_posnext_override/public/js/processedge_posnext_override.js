@@ -156,11 +156,11 @@
       '<div class="flex items-center gap-2">',
       '<svg class="w-4 h-4 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">',
       '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>',
-      '</svg>',
+      "</svg>",
       '<label class="text-xs font-medium text-blue-700 flex-shrink-0">Posting Date</label>',
       `<input type="date" value="${STATE.postingDate || getToday()}" class="flex-1 h-8 border border-blue-300 rounded-lg px-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white" />`,
-      '</div>',
-      '</div>',
+      "</div>",
+      "</div>",
     ].join("");
 
     const input = wrapper.querySelector("input");
@@ -171,6 +171,64 @@
     }
 
     target.parentNode.insertBefore(wrapper, target);
+  }
+
+  function createPersistentPostingDateField(container) {
+    if (!container || container.querySelector("[data-processedge-posting-date-global]")) {
+      return;
+    }
+
+    const wrapper = document.createElement("div");
+    wrapper.setAttribute("data-processedge-posting-date-global", "1");
+    wrapper.className = "processedge-posting-date-global";
+    wrapper.style.cssText = [
+      "display:flex",
+      "align-items:center",
+      "gap:8px",
+      "padding:8px 12px",
+      "margin:8px 0",
+      "border:1px solid #bfdbfe",
+      "border-radius:12px",
+      "background:#eff6ff",
+      "font-size:14px",
+      "width:fit-content",
+      "max-width:100%",
+    ].join(";");
+    wrapper.innerHTML = [
+      '<label style="font-weight:600;color:#1d4ed8;white-space:nowrap;">Posting Date</label>',
+      `<input type="date" value="${STATE.postingDate || getToday()}" style="height:36px;padding:0 10px;border:1px solid #93c5fd;border-radius:10px;background:#fff;min-width:170px;" />`,
+    ].join("");
+
+    const input = wrapper.querySelector("input");
+    if (input) {
+      input.addEventListener("change", function (event) {
+        STATE.postingDate = event.target.value || getToday();
+      });
+    }
+
+    container.prepend(wrapper);
+  }
+
+  function injectPostingDateIntoPage() {
+    if (!STATE.settings || !STATE.settings.allow_editing_posting_date) {
+      return;
+    }
+
+    const candidates = [
+      "[data-v-app] main",
+      "#app main",
+      ".layout-main-section",
+      ".page-content",
+      "main",
+    ];
+
+    for (const selector of candidates) {
+      const container = document.querySelector(selector);
+      if (container) {
+        createPersistentPostingDateField(container);
+        return;
+      }
+    }
   }
 
   function unlockRateInputs() {
@@ -223,6 +281,8 @@
       return;
     }
 
+    injectPostingDateIntoPage();
+
     const dialogTitles = Array.from(document.querySelectorAll("[role='dialog'], .dialog-content, .frappe-dialog, .z-dialog-content"));
     dialogTitles.forEach((dialog) => {
       if (!dialog || dialog.querySelector("[data-processedge-posting-date]")) {
@@ -230,7 +290,12 @@
       }
 
       const text = dialog.textContent || "";
-      if (text.includes("Complete Payment") || text.includes("Complete Sales Order")) {
+      if (
+        text.includes("Complete Payment") ||
+        text.includes("Complete Sales Order") ||
+        text.includes("Payment") ||
+        text.includes("Amount Paid")
+      ) {
         createPostingDateField(dialog);
       }
     });
