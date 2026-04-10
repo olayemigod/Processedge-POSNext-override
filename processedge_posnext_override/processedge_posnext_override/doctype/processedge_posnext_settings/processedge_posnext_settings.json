@@ -1,0 +1,66 @@
+{
+ "actions": [],
+ "autoname": "prompt",
+ "creation": "2026-04-10 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "feature_section",
+  "allow_editable_selling_price",
+  "allow_editing_posting_date",
+  "role_section",
+  "editable_price_roles"
+ ],
+ "fields": [
+  {
+   "fieldname": "feature_section",
+   "fieldtype": "Section Break",
+   "label": "POS Behavior Controls"
+  },
+  {
+   "default": "0",
+   "description": "When enabled, the POS Edit Item dialog can change the selling rate and POSNext will continue using its native recalculation flow.",
+   "fieldname": "allow_editable_selling_price",
+   "fieldtype": "Check",
+   "label": "Allow Editable Selling Price on POS"
+  },
+  {
+   "default": "0",
+   "description": "When enabled, cashiers can choose a posting date during checkout and the submitted POS invoice will use that date.",
+   "fieldname": "allow_editing_posting_date",
+   "fieldtype": "Check",
+   "label": "Allow Editing Posting Date on POS"
+  },
+  {
+   "fieldname": "role_section",
+   "fieldtype": "Section Break",
+   "label": "Future Restriction Support"
+  },
+  {
+   "description": "Optional future guard. Enter one role per line or comma-separated. Leave empty to allow all POS users when selling price editing is enabled.",
+   "fieldname": "editable_price_roles",
+   "fieldtype": "Small Text",
+   "label": "Editable Price Roles"
+  }
+ ],
+ "issingle": 1,
+ "module": "ProcessEdge POSNext Override",
+ "name": "ProcessEdge POSNext Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}
