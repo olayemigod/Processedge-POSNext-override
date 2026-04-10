@@ -6,6 +6,7 @@ App-level POSNext customizations for ERPNext/Frappe that keep upgrade risk low b
 
 - Global setting to allow editable selling price on POS
 - Global setting to allow editable posting date on POS
+- Per-profile opt-out for rate editing through POSNext POS Settings when the global rate toggle is enabled
 - Sync layer that maps app settings to POSNext's native POS Settings fields
 - POS page runtime patch for posting date UI and invoice payload injection
 - Backend validation guard for POS invoice posting date changes
@@ -46,6 +47,8 @@ The app automatically syncs these settings into POSNext's `POS Settings` records
 ## How It Works
 
 - `ProcessEdge POSNext Settings` is the source of truth.
+- The global selling-price toggle acts as a master switch.
+- When the global selling-price toggle is enabled, each POS Settings record can still disable `allow_user_to_edit_rate` for its own profile.
 - The app mirrors flags into POSNext `POS Settings`:
   - `allow_user_to_edit_rate`
   - `allow_change_posting_date`

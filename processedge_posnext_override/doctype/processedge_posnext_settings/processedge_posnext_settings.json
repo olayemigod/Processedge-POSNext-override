@@ -19,7 +19,7 @@
   },
   {
    "default": "0",
-   "description": "When enabled, the POS Edit Item dialog can change the selling rate and POSNext will continue using its native recalculation flow.",
+   "description": "Master switch for manual rate editing on POS. When enabled, each POS Settings record can still disable rate editing for its own profile.",
    "fieldname": "allow_editable_selling_price",
    "fieldtype": "Check",
    "label": "Allow Editable Selling Price on POS"

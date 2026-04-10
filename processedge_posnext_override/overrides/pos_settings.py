@@ -25,10 +25,86 @@ def get_app_flags():
     }
 
 
+def is_global_rate_editing_enabled():
+    return int(get_app_settings_doc().allow_editable_selling_price or 0)
+
+
+def get_current_pos_profile(user=None):
+    user = user or frappe.session.user
+    if not user or user == "Guest" or not frappe.db.exists("DocType", "POS Opening Entry"):
+        return None
+
+    fields = ["pos_profile"]
+    order_by = "modified desc"
+
+    if frappe.db.has_column("POS Opening Entry", "status"):
+        entries = frappe.get_all(
+            "POS Opening Entry",
+            filters={"user": user, "status": "Open"},
+            fields=fields,
+            order_by=order_by,
+            limit=1,
+        )
+        if entries and entries[0].get("pos_profile"):
+            return entries[0].get("pos_profile")
+
+    if frappe.db.has_column("POS Opening Entry", "docstatus"):
+        entries = frappe.get_all(
+            "POS Opening Entry",
+            filters={"user": user, "docstatus": 1},
+            fields=fields,
+            order_by=order_by,
+            limit=1,
+        )
+        if entries and entries[0].get("pos_profile"):
+            return entries[0].get("pos_profile")
+
+    entries = frappe.get_all(
+        "POS Opening Entry",
+        filters={"user": user},
+        fields=fields,
+        order_by=order_by,
+        limit=1,
+    )
+    if entries:
+        return entries[0].get("pos_profile")
+
+    return None
+
+
+def get_pos_settings_doc(pos_profile):
+    if not pos_profile or not frappe.db.exists("DocType", "POS Settings"):
+        return None
+
+    name = None
+    if frappe.db.has_column("POS Settings", "pos_profile"):
+        name = frappe.db.get_value("POS Settings", {"pos_profile": pos_profile}, "name")
+
+    if not name and frappe.db.exists("POS Settings", pos_profile):
+        name = pos_profile
+
+    if not name:
+        return None
+
+    return frappe.get_cached_doc("POS Settings", name)
+
+
+def get_effective_rate_editability(pos_profile=None, pos_settings_doc=None):
+    if not is_global_rate_editing_enabled():
+        return 0
+
+    pos_settings_doc = pos_settings_doc or get_pos_settings_doc(pos_profile)
+    if pos_settings_doc is None:
+        return 1
+
+    return int(pos_settings_doc.allow_user_to_edit_rate or 0)
+
+
 def apply_app_settings_to_doc(doc, method=None):
     flags = get_app_flags()
-    doc.allow_user_to_edit_rate = flags["allow_user_to_edit_rate"]
     doc.allow_change_posting_date = flags["allow_change_posting_date"]
+    if not flags["allow_user_to_edit_rate"]:
+        doc.allow_user_to_edit_rate = 0
 
 
 def ensure_posnext_settings_sync():
@@ -49,8 +125,8 @@ def ensure_posnext_settings_sync():
             continue
 
         updates = {}
-        if int(current.allow_user_to_edit_rate or 0) != flags["allow_user_to_edit_rate"]:
-            updates["allow_user_to_edit_rate"] = flags["allow_user_to_edit_rate"]
+        if not flags["allow_user_to_edit_rate"] and int(current.allow_user_to_edit_rate or 0) != 0:
+            updates["allow_user_to_edit_rate"] = 0
         if int(current.allow_change_posting_date or 0) != flags["allow_change_posting_date"]:
             updates["allow_change_posting_date"] = flags["allow_change_posting_date"]
 
@@ -68,6 +144,10 @@ def get_pos_settings_override(pos_profile):
         settings = {}
 
     flags = get_app_flags()
-    settings["allow_user_to_edit_rate"] = flags["allow_user_to_edit_rate"]
+    pos_settings_doc = get_pos_settings_doc(pos_profile)
+    settings["allow_user_to_edit_rate"] = get_effective_rate_editability(
+        pos_profile=pos_profile,
+        pos_settings_doc=pos_settings_doc,
+    )
     settings["allow_change_posting_date"] = flags["allow_change_posting_date"]
     return settings
