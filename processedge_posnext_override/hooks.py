@@ -8,11 +8,11 @@ app_license = "MIT"
 required_apps = ["erpnext", "pos_next"]
 
 app_include_js = [
-    "/assets/processedge_posnext_override/js/processedge_posnext_override.js",
+    "processedge_posnext_override.bundle.js",
 ]
 
 web_include_js = [
-    "/assets/processedge_posnext_override/js/processedge_posnext_override.js",
+    "processedge_posnext_override.bundle.js",
 ]
 
 fixtures = []
