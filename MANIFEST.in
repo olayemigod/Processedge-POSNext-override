@@ -1,0 +1,3 @@
+include requirements.txt
+recursive-include processedge_posnext_override *.json *.js *.py *.html *.css *.md
+recursive-exclude processedge_posnext_override *.pyc

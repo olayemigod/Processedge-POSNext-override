@@ -1,2 +1,73 @@
-# Processedge-POSNext-override
-Processedge POSNext override will override POSNext behaviours:
+# ProcessEdge POSNext Override
+
+App-level POSNext customizations for ERPNext/Frappe that keep upgrade risk low by avoiding core edits.
+
+## Features
+
+- Global setting to allow editable selling price on POS
+- Global setting to allow editable posting date on POS
+- Sync layer that maps app settings to POSNext's native POS Settings fields
+- POS page runtime patch for posting date UI and invoice payload injection
+- Backend validation guard for POS invoice posting date changes
+
+## Target Stack
+
+- Frappe / ERPNext v16
+- POSNext `develop` branch reference
+
+## Installation
+
+```bash
+cd /path/to/frappe-bench
+bench get-app https://github.com/olayemigod/Processedge-POSNext-override.git
+bench --site your-site install-app processedge_posnext_override
+bench --site your-site migrate
+bench build --app processedge_posnext_override
+bench --site your-site clear-cache
+```
+
+If POSNext is already installed, keep it installed and rebuild both apps when needed:
+
+```bash
+bench build --app pos_next --app processedge_posnext_override
+```
+
+## Configuration
+
+1. Open `ProcessEdge POSNext Settings` in Desk.
+2. Toggle:
+   - `Allow Editable Selling Price on POS`
+   - `Allow Editing Posting Date on POS`
+3. Save the document.
+4. Reload the POS screen.
+
+The app automatically syncs these settings into POSNext's `POS Settings` records so existing POSNext frontend and backend behavior can keep using their native fields.
+
+## How It Works
+
+- `ProcessEdge POSNext Settings` is the source of truth.
+- The app mirrors flags into POSNext `POS Settings`:
+  - `allow_user_to_edit_rate`
+  - `allow_change_posting_date`
+- The POS page script adds a posting date field in the checkout dialog and injects the chosen date into POSNext invoice requests.
+- Sales Invoice validation prevents custom posting dates when the feature is disabled.
+
+## Files Of Interest
+
+- `processedge_posnext_override/hooks.py`
+- `processedge_posnext_override/api.py`
+- `processedge_posnext_override/overrides/pos_settings.py`
+- `processedge_posnext_override/overrides/sales_invoice.py`
+- `processedge_posnext_override/public/js/processedge_posnext_override.js`
+
+## Validation Checklist
+
+- Open POS and confirm rate field is read-only when disabled.
+- Enable selling price editing and confirm Edit Item dialog rate field is editable.
+- Enable posting date editing and confirm checkout dialog shows a posting date field.
+- Submit a POS invoice and confirm the selected posting date is stored on the Sales Invoice.
+
+## Suggested Repository Metadata
+
+- Repository name: `processedge-posnext-override`
+- Description: `ERPNext v16 custom app for POSNext price-edit and posting-date controls without core edits.`
