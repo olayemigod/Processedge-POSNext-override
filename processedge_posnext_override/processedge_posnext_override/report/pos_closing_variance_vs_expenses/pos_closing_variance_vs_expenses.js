@@ -37,5 +37,12 @@ frappe.query_reports["POS Closing Variance vs Expenses"] = {
       options: "Cost Center",
       description: __("Optional. If blank, the report uses the POS Profile cost center when available."),
     },
+    {
+      fieldname: "include_cogs",
+      label: __("Include COGS / Stock Expense"),
+      fieldtype: "Check",
+      default: 0,
+      description: __("Enable only if you want stock valuation or cost-of-goods entries included as expenses."),
+    },
   ],
 };

@@ -64,6 +64,7 @@ def get_data(filters):
             posting_date=entry.posting_date,
             company=entry.company,
             cost_center=cost_center,
+            include_cogs=filters.get("include_cogs"),
         )
 
         parent_row = f"closing::{entry.name}"
@@ -90,7 +91,7 @@ def get_data(filters):
         }
         rows.append(base_row)
         rows.extend(get_payment_detail_rows(entry, parent_row))
-        rows.extend(get_expense_detail_rows(entry, parent_row, cost_center))
+        rows.extend(get_expense_detail_rows(entry, parent_row, cost_center, include_cogs=filters.get("include_cogs")))
 
     return rows
 
@@ -123,13 +124,14 @@ def get_payment_detail_rows(entry, parent_row):
     return rows
 
 
-def get_expense_detail_rows(entry, parent_row, cost_center):
+def get_expense_detail_rows(entry, parent_row, cost_center, include_cogs=False):
     rows = []
     for idx, expense in enumerate(
         get_expense_details(
             posting_date=entry.posting_date,
             company=entry.company,
             cost_center=cost_center,
+            include_cogs=include_cogs,
         ),
         start=1,
     ):
@@ -300,8 +302,8 @@ def get_business_location(pos_profile, cost_center):
     return values.get("warehouse") or values.get("cost_center") or values.get("pos_profile")
 
 
-def get_expenses(posting_date, company=None, cost_center=None):
-    conditions = ["gle.docstatus = 1", "gle.posting_date = %(posting_date)s", "account.root_type = 'Expense'"]
+def get_expenses(posting_date, company=None, cost_center=None, include_cogs=False):
+    conditions = get_expense_conditions(include_cogs=include_cogs)
     values = {"posting_date": posting_date}
 
     if frappe.db.has_column("GL Entry", "is_cancelled"):
@@ -326,8 +328,8 @@ def get_expenses(posting_date, company=None, cost_center=None):
     return flt(result[0].amount if result else 0)
 
 
-def get_expense_details(posting_date, company=None, cost_center=None):
-    conditions = ["gle.docstatus = 1", "gle.posting_date = %(posting_date)s", "account.root_type = 'Expense'"]
+def get_expense_details(posting_date, company=None, cost_center=None, include_cogs=False):
+    conditions = get_expense_conditions(include_cogs=include_cogs)
     values = {"posting_date": posting_date}
 
     if frappe.db.has_column("GL Entry", "is_cancelled"):
@@ -357,6 +359,28 @@ def get_expense_details(posting_date, company=None, cost_center=None):
         values,
         as_dict=True,
     )
+
+
+def get_expense_conditions(include_cogs=False):
+    conditions = [
+        "gle.docstatus = 1",
+        "gle.posting_date = %(posting_date)s",
+        "account.root_type = 'Expense'",
+    ]
+
+    if not include_cogs:
+        conditions.append(
+            """
+            coalesce(account.account_type, '') not in (
+                'Cost of Goods Sold',
+                'Stock Adjustment',
+                'Expenses Included In Valuation',
+                'Expenses Included In Asset Valuation'
+            )
+            """
+        )
+
+    return conditions
 
 
 def get_existing_column(doctype, candidates):
