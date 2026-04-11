@@ -21,3 +21,6 @@ zip-safe = false
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["processedge_posnext_override*"]
+
+[tool.setuptools.package-data]
+processedge_posnext_override = ["**/*.json", "**/*.js", "**/*.html", "**/*.css", "**/*.md", "**/*.txt"]

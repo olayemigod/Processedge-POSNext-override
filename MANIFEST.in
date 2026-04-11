@@ -1,3 +1,4 @@
 include requirements.txt
-recursive-include processedge_posnext_override *.json *.js *.py *.html *.css *.md
+include pyproject.toml
+recursive-include processedge_posnext_override *.json *.js *.py *.html *.css *.md *.txt
 recursive-exclude processedge_posnext_override *.pyc
