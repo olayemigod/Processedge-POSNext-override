@@ -1,4 +1,8 @@
 frappe.query_reports["POS Closing Variance vs Expenses"] = {
+  tree: true,
+  name_field: "row_id",
+  parent_field: "parent_row",
+  initial_depth: 1,
   filters: [
     {
       fieldname: "from_date",

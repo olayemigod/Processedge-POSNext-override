@@ -25,6 +25,10 @@ def validate_filters(filters):
 
 def get_columns():
     return [
+        {"label": _("Row ID"), "fieldname": "row_id", "fieldtype": "Data", "hidden": 1},
+        {"label": _("Parent Row"), "fieldname": "parent_row", "fieldtype": "Data", "hidden": 1},
+        {"label": _("Type"), "fieldname": "row_type", "fieldtype": "Data", "width": 150},
+        {"label": _("Source"), "fieldname": "source", "fieldtype": "Data", "width": 180},
         {"label": _("Date"), "fieldname": "posting_date", "fieldtype": "Date", "width": 110},
         {"label": _("POS Closing Entry"), "fieldname": "pos_closing_entry", "fieldtype": "Link", "options": "POS Closing Entry", "width": 190},
         {"label": _("POS Profile"), "fieldname": "pos_profile", "fieldtype": "Link", "options": "POS Profile", "width": 170},
@@ -40,6 +44,10 @@ def get_columns():
         {"label": _("Excess Expenses"), "fieldname": "excess_expenses", "fieldtype": "Currency", "width": 145},
         {"label": _("Expense Cost Center"), "fieldname": "expense_cost_center", "fieldtype": "Link", "options": "Cost Center", "width": 190},
         {"label": _("Opening Entry"), "fieldname": "pos_opening_entry", "fieldtype": "Link", "options": "POS Opening Entry", "width": 190},
+        {"label": _("Mode of Payment"), "fieldname": "mode_of_payment", "fieldtype": "Link", "options": "Mode of Payment", "width": 170},
+        {"label": _("Voucher Type"), "fieldname": "voucher_type", "fieldtype": "Data", "width": 150},
+        {"label": _("Voucher"), "fieldname": "voucher_no", "fieldtype": "Dynamic Link", "options": "voucher_type", "width": 190},
+        {"label": _("Expense Account"), "fieldname": "expense_account", "fieldtype": "Link", "options": "Account", "width": 220},
     ]
 
 
@@ -58,23 +66,90 @@ def get_data(filters):
             cost_center=cost_center,
         )
 
+        parent_row = f"closing::{entry.name}"
+        base_row = {
+            "row_id": parent_row,
+            "row_type": _("Closing Summary"),
+            "source": entry.name,
+            "indent": 0,
+            "posting_date": entry.posting_date,
+            "pos_closing_entry": entry.name,
+            "pos_profile": entry.pos_profile,
+            "business_location": get_business_location(entry.pos_profile, cost_center),
+            "company": entry.company,
+            "closed_by": entry.user,
+            "expected_amount": totals.get("expected_amount"),
+            "closing_amount": totals.get("closing_amount"),
+            "variance": variance,
+            "shortage": shortage,
+            "expenses": expenses,
+            "unmatched_shortage": max(shortage - expenses, 0),
+            "excess_expenses": max(expenses - shortage, 0),
+            "expense_cost_center": cost_center,
+            "pos_opening_entry": entry.pos_opening_entry,
+        }
+        rows.append(base_row)
+        rows.extend(get_payment_detail_rows(entry, parent_row))
+        rows.extend(get_expense_detail_rows(entry, parent_row, cost_center))
+
+    return rows
+
+
+def get_payment_detail_rows(entry, parent_row):
+    rows = []
+    for idx, payment in enumerate(get_closing_payment_details(entry.name), start=1):
+        variance = flt(payment.get("variance"))
         rows.append(
             {
+                "row_id": f"{parent_row}::payment::{idx}",
+                "parent_row": parent_row,
+                "indent": 1,
+                "row_type": _("Variance Source"),
+                "source": payment.get("mode_of_payment") or _("Payment Row"),
                 "posting_date": entry.posting_date,
                 "pos_closing_entry": entry.name,
                 "pos_profile": entry.pos_profile,
-                "business_location": get_business_location(entry.pos_profile, cost_center),
                 "company": entry.company,
                 "closed_by": entry.user,
-                "expected_amount": totals.get("expected_amount"),
-                "closing_amount": totals.get("closing_amount"),
+                "expected_amount": payment.get("expected_amount"),
+                "closing_amount": payment.get("closing_amount"),
                 "variance": variance,
-                "shortage": shortage,
-                "expenses": expenses,
-                "unmatched_shortage": max(shortage - expenses, 0),
-                "excess_expenses": max(expenses - shortage, 0),
-                "expense_cost_center": cost_center,
+                "shortage": abs(variance) if variance < 0 else 0,
                 "pos_opening_entry": entry.pos_opening_entry,
+                "mode_of_payment": payment.get("mode_of_payment"),
+            }
+        )
+
+    return rows
+
+
+def get_expense_detail_rows(entry, parent_row, cost_center):
+    rows = []
+    for idx, expense in enumerate(
+        get_expense_details(
+            posting_date=entry.posting_date,
+            company=entry.company,
+            cost_center=cost_center,
+        ),
+        start=1,
+    ):
+        rows.append(
+            {
+                "row_id": f"{parent_row}::expense::{idx}",
+                "parent_row": parent_row,
+                "indent": 1,
+                "row_type": _("Expense Source"),
+                "source": expense.get("voucher_no") or expense.get("account"),
+                "posting_date": entry.posting_date,
+                "pos_closing_entry": entry.name,
+                "pos_profile": entry.pos_profile,
+                "company": entry.company,
+                "expenses": expense.get("amount"),
+                "expense_cost_center": expense.get("cost_center") or cost_center,
+                "pos_opening_entry": entry.pos_opening_entry,
+                "voucher_type": expense.get("voucher_type"),
+                "voucher_no": expense.get("voucher_no"),
+                "expense_account": expense.get("account"),
             }
         )
 
@@ -159,6 +234,42 @@ def get_closing_totals(pos_closing_entry):
     return result[0] if result else {"expected_amount": 0, "closing_amount": 0, "variance": 0}
 
 
+def get_closing_payment_details(pos_closing_entry):
+    child_table = get_closing_payment_child_table()
+    if not child_table:
+        return []
+
+    mode_field = get_existing_column(child_table, ["mode_of_payment", "payment_method", "payment_type"])
+    expected_field = get_existing_column(child_table, ["expected_amount", "expected", "system_amount"])
+    closing_field = get_existing_column(child_table, ["closing_amount", "counted_amount", "amount"])
+    difference_field = get_existing_column(child_table, ["difference", "variance"])
+
+    select_fields = ["idx"]
+    select_fields.append(f"`{mode_field}` as mode_of_payment" if mode_field else "'' as mode_of_payment")
+    select_fields.append(f"coalesce(`{expected_field}`, 0) as expected_amount" if expected_field else "0 as expected_amount")
+    select_fields.append(f"coalesce(`{closing_field}`, 0) as closing_amount" if closing_field else "0 as closing_amount")
+
+    if difference_field:
+        select_fields.append(f"coalesce(`{difference_field}`, 0) as variance")
+    elif expected_field and closing_field:
+        select_fields.append(f"coalesce(`{closing_field}`, 0) - coalesce(`{expected_field}`, 0) as variance")
+    else:
+        select_fields.append("0 as variance")
+
+    return frappe.db.sql(
+        f"""
+        select {", ".join(select_fields)}
+        from `tab{child_table}`
+        where parent = %s
+            and parenttype = 'POS Closing Entry'
+            and parentfield in ('payment_reconciliation', 'payment_reconciliations')
+        order by idx
+        """,
+        pos_closing_entry,
+        as_dict=True,
+    )
+
+
 def get_closing_payment_child_table():
     meta = frappe.get_meta("POS Closing Entry")
     for fieldname in ("payment_reconciliation", "payment_reconciliations"):
@@ -215,6 +326,39 @@ def get_expenses(posting_date, company=None, cost_center=None):
     return flt(result[0].amount if result else 0)
 
 
+def get_expense_details(posting_date, company=None, cost_center=None):
+    conditions = ["gle.docstatus = 1", "gle.posting_date = %(posting_date)s", "account.root_type = 'Expense'"]
+    values = {"posting_date": posting_date}
+
+    if frappe.db.has_column("GL Entry", "is_cancelled"):
+        conditions.append("gle.is_cancelled = 0")
+    if company:
+        conditions.append("gle.company = %(company)s")
+        values["company"] = company
+    if cost_center and frappe.db.has_column("GL Entry", "cost_center"):
+        conditions.append("gle.cost_center = %(cost_center)s")
+        values["cost_center"] = cost_center
+
+    return frappe.db.sql(
+        f"""
+        select
+            gle.voucher_type,
+            gle.voucher_no,
+            gle.account,
+            gle.cost_center,
+            sum(coalesce(gle.debit, 0) - coalesce(gle.credit, 0)) as amount
+        from `tabGL Entry` gle
+        inner join `tabAccount` account on account.name = gle.account
+        where {" and ".join(conditions)}
+        group by gle.voucher_type, gle.voucher_no, gle.account, gle.cost_center
+        having amount != 0
+        order by gle.voucher_type, gle.voucher_no, gle.account
+        """,
+        values,
+        as_dict=True,
+    )
+
+
 def get_existing_column(doctype, candidates):
     for fieldname in candidates:
         if frappe.db.has_column(doctype, fieldname):
@@ -223,9 +367,10 @@ def get_existing_column(doctype, candidates):
 
 
 def get_summary(data):
-    total_shortage = sum(flt(row.get("shortage")) for row in data)
-    total_expenses = sum(flt(row.get("expenses")) for row in data)
-    total_unmatched = sum(flt(row.get("unmatched_shortage")) for row in data)
+    summary_rows = [row for row in data if not row.get("parent_row")]
+    total_shortage = sum(flt(row.get("shortage")) for row in summary_rows)
+    total_expenses = sum(flt(row.get("expenses")) for row in summary_rows)
+    total_unmatched = sum(flt(row.get("unmatched_shortage")) for row in summary_rows)
 
     return [
         {"value": total_shortage, "label": _("Total Shortage"), "datatype": "Currency", "indicator": "Red" if total_shortage else "Green"},
