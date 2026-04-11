@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "processedge_posnext_override"
+version = "0.0.1"
+description = "ProcessEdge POSNext overrides for editable price, posting date, and variance reporting on ERPNext v16"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "ProcessEdge Solutions", email = "processedgeng@gmail.com" }
+]
+dependencies = []
+
+[tool.setuptools]
+include-package-data = true
+zip-safe = false
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["processedge_posnext_override*"]
