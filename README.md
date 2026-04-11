@@ -10,6 +10,7 @@ App-level POSNext customizations for ERPNext/Frappe that keep upgrade risk low b
 - Sync layer that maps app settings to POSNext's native POS Settings fields
 - POS page runtime patch for posting date UI and invoice payload injection
 - Backend validation guard for POS invoice posting date changes
+- Script Report: `POS Closing Variance vs Expenses`
 
 ## Target Stack
 
@@ -69,6 +70,13 @@ The app automatically syncs these settings into POSNext's `POS Settings` records
 - Enable selling price editing and confirm Edit Item dialog rate field is editable.
 - Enable posting date editing and confirm checkout dialog shows a posting date field.
 - Submit a POS invoice and confirm the selected posting date is stored on the Sales Invoice.
+- Run `POS Closing Variance vs Expenses` and confirm shortages are compared with same-day expense GL entries.
+
+## POS Closing Variance vs Expenses Report
+
+The report compares submitted `POS Closing Entry` variances with net expense GL entries for the same posting date and company. If an `Expense Cost Center` filter is not selected, the report uses the POS Profile cost center when that field exists.
+
+Use this to review whether POS shortages at a business location are supported by expenses booked for the same location and date.
 
 ## Suggested Repository Metadata
 

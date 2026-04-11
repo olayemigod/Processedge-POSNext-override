@@ -209,6 +209,44 @@
     container.prepend(wrapper);
   }
 
+  function createFloatingPostingDateField() {
+    if (document.querySelector("[data-processedge-posting-date-floating]")) {
+      return;
+    }
+
+    const wrapper = document.createElement("div");
+    wrapper.setAttribute("data-processedge-posting-date-floating", "1");
+    wrapper.style.cssText = [
+      "position:fixed",
+      "right:24px",
+      "bottom:96px",
+      "z-index:9999",
+      "display:flex",
+      "align-items:center",
+      "gap:8px",
+      "padding:10px 12px",
+      "border:1px solid #bfdbfe",
+      "border-radius:14px",
+      "background:#eff6ff",
+      "box-shadow:0 10px 30px rgba(15, 23, 42, 0.12)",
+      "font-size:14px",
+      "max-width:calc(100vw - 48px)",
+    ].join(";");
+    wrapper.innerHTML = [
+      '<label style="font-weight:600;color:#1d4ed8;white-space:nowrap;">Posting Date</label>',
+      `<input type="date" value="${STATE.postingDate || getToday()}" style="height:36px;padding:0 10px;border:1px solid #93c5fd;border-radius:10px;background:#fff;min-width:170px;" />`,
+    ].join("");
+
+    const input = wrapper.querySelector("input");
+    if (input) {
+      input.addEventListener("change", function (event) {
+        STATE.postingDate = event.target.value || getToday();
+      });
+    }
+
+    document.body.appendChild(wrapper);
+  }
+
   function injectPostingDateIntoPage() {
     if (!STATE.settings || !STATE.settings.allow_editing_posting_date) {
       return;
@@ -226,9 +264,12 @@
       const container = document.querySelector(selector);
       if (container) {
         createPersistentPostingDateField(container);
+        createFloatingPostingDateField();
         return;
       }
     }
+
+    createFloatingPostingDateField();
   }
 
   function unlockRateInputs() {
