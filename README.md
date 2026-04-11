@@ -74,7 +74,7 @@ The app automatically syncs these settings into POSNext's `POS Settings` records
 
 ## POS Closing Variance vs Expenses Report
 
-The report compares submitted `POS Closing Entry` variances with net expense GL entries for the same posting date and company. If an `Expense Cost Center` filter is not selected, the report uses the POS Profile cost center when that field exists.
+The report compares submitted POSNext `POS Closing Shift` variances with net expense GL entries for the same posting date and company. If an `Expense Cost Center` filter is not selected, the report uses the POS Profile cost center when that field exists.
 
 Use this to review whether POS shortages at a business location are supported by expenses booked for the same location and date.
 

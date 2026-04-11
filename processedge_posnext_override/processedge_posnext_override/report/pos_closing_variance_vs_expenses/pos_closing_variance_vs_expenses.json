@@ -14,7 +14,7 @@
  "name": "POS Closing Variance vs Expenses",
  "owner": "Administrator",
  "prepared_report": 0,
- "ref_doctype": "POS Closing Entry",
+ "ref_doctype": "POS Closing Shift",
  "report_name": "POS Closing Variance vs Expenses",
  "report_type": "Script Report",
  "roles": [

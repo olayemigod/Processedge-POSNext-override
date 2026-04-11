@@ -30,7 +30,7 @@ def get_columns():
         {"label": _("Type"), "fieldname": "row_type", "fieldtype": "Data", "width": 150},
         {"label": _("Source"), "fieldname": "source", "fieldtype": "Data", "width": 180},
         {"label": _("Date"), "fieldname": "posting_date", "fieldtype": "Date", "width": 110},
-        {"label": _("POS Closing Entry"), "fieldname": "pos_closing_entry", "fieldtype": "Link", "options": "POS Closing Entry", "width": 190},
+        {"label": _("POS Closing Shift"), "fieldname": "pos_closing_shift", "fieldtype": "Link", "options": "POS Closing Shift", "width": 190},
         {"label": _("POS Profile"), "fieldname": "pos_profile", "fieldtype": "Link", "options": "POS Profile", "width": 170},
         {"label": _("Business Location"), "fieldname": "business_location", "fieldtype": "Data", "width": 170},
         {"label": _("Company"), "fieldname": "company", "fieldtype": "Link", "options": "Company", "width": 170},
@@ -43,7 +43,7 @@ def get_columns():
         {"label": _("Unmatched Shortage"), "fieldname": "unmatched_shortage", "fieldtype": "Currency", "width": 155},
         {"label": _("Excess Expenses"), "fieldname": "excess_expenses", "fieldtype": "Currency", "width": 145},
         {"label": _("Expense Cost Center"), "fieldname": "expense_cost_center", "fieldtype": "Link", "options": "Cost Center", "width": 190},
-        {"label": _("Opening Entry"), "fieldname": "pos_opening_entry", "fieldtype": "Link", "options": "POS Opening Entry", "width": 190},
+        {"label": _("Opening Shift"), "fieldname": "pos_opening_shift", "fieldtype": "Link", "options": "POS Opening Shift", "width": 190},
         {"label": _("Mode of Payment"), "fieldname": "mode_of_payment", "fieldtype": "Link", "options": "Mode of Payment", "width": 170},
         {"label": _("Voucher Type"), "fieldname": "voucher_type", "fieldtype": "Data", "width": 150},
         {"label": _("Voucher"), "fieldname": "voucher_no", "fieldtype": "Dynamic Link", "options": "voucher_type", "width": 190},
@@ -74,7 +74,7 @@ def get_data(filters):
             "source": entry.name,
             "indent": 0,
             "posting_date": entry.posting_date,
-            "pos_closing_entry": entry.name,
+            "pos_closing_shift": entry.name,
             "pos_profile": entry.pos_profile,
             "business_location": get_business_location(entry.pos_profile, cost_center),
             "company": entry.company,
@@ -87,7 +87,7 @@ def get_data(filters):
             "unmatched_shortage": max(shortage - expenses, 0),
             "excess_expenses": max(expenses - shortage, 0),
             "expense_cost_center": cost_center,
-            "pos_opening_entry": entry.pos_opening_entry,
+            "pos_opening_shift": entry.pos_opening_shift,
         }
         rows.append(base_row)
         rows.extend(get_payment_detail_rows(entry, parent_row))
@@ -108,7 +108,7 @@ def get_payment_detail_rows(entry, parent_row):
                 "row_type": _("Variance Source"),
                 "source": payment.get("mode_of_payment") or _("Payment Row"),
                 "posting_date": entry.posting_date,
-                "pos_closing_entry": entry.name,
+                "pos_closing_shift": entry.name,
                 "pos_profile": entry.pos_profile,
                 "company": entry.company,
                 "closed_by": entry.user,
@@ -116,7 +116,7 @@ def get_payment_detail_rows(entry, parent_row):
                 "closing_amount": payment.get("closing_amount"),
                 "variance": variance,
                 "shortage": abs(variance) if variance < 0 else 0,
-                "pos_opening_entry": entry.pos_opening_entry,
+                "pos_opening_shift": entry.pos_opening_shift,
                 "mode_of_payment": payment.get("mode_of_payment"),
             }
         )
@@ -143,12 +143,12 @@ def get_expense_detail_rows(entry, parent_row, cost_center, include_cogs=False):
                 "row_type": _("Expense Source"),
                 "source": expense.get("voucher_no") or expense.get("account"),
                 "posting_date": entry.posting_date,
-                "pos_closing_entry": entry.name,
+                "pos_closing_shift": entry.name,
                 "pos_profile": entry.pos_profile,
                 "company": entry.company,
                 "expenses": expense.get("amount"),
                 "expense_cost_center": expense.get("cost_center") or cost_center,
-                "pos_opening_entry": entry.pos_opening_entry,
+                "pos_opening_shift": entry.pos_opening_shift,
                 "voucher_type": expense.get("voucher_type"),
                 "voucher_no": expense.get("voucher_no"),
                 "expense_account": expense.get("account"),
@@ -159,23 +159,22 @@ def get_expense_detail_rows(entry, parent_row, cost_center, include_cogs=False):
 
 
 def get_closing_entries(filters):
-    closing = frappe.qb.DocType("POS Closing Entry")
-    opening = frappe.qb.DocType("POS Opening Entry")
+    closing = frappe.qb.DocType("POS Closing Shift")
+    opening = frappe.qb.DocType("POS Opening Shift")
 
-    closing_date_field = get_existing_column("POS Closing Entry", ["posting_date", "period_end_date", "closing_date", "modified"])
-    user_field = get_existing_column("POS Closing Entry", ["user", "owner"])
-    company_field = get_existing_column("POS Closing Entry", ["company"])
+    closing_date_field = get_existing_column("POS Closing Shift", ["posting_date", "period_end_date", "closing_date", "modified"])
+    user_field = get_existing_column("POS Closing Shift", ["user", "owner"])
+    company_field = get_existing_column("POS Closing Shift", ["company"])
 
     query = (
         frappe.qb.from_(closing)
         .left_join(opening)
-        .on(closing.pos_opening_entry == opening.name)
+        .on(closing.pos_opening_shift == opening.name)
         .select(
             closing.name,
-            closing.pos_opening_entry,
+            closing.pos_opening_shift,
             closing[closing_date_field].as_("posting_date"),
             closing[user_field].as_("user"),
-            opening.pos_profile,
         )
         .where(closing.docstatus == 1)
         .where(closing[closing_date_field].between(filters.from_date, filters.to_date))
@@ -188,6 +187,11 @@ def get_closing_entries(filters):
     else:
         query = query.select(opening.company.as_("company"))
 
+    if frappe.db.has_column("POS Closing Shift", "pos_profile"):
+        query = query.select(closing.pos_profile)
+    else:
+        query = query.select(opening.pos_profile)
+
     if filters.get("company"):
         if company_field:
             query = query.where(closing[company_field] == filters.company)
@@ -195,12 +199,15 @@ def get_closing_entries(filters):
             query = query.where(opening.company == filters.company)
 
     if filters.get("pos_profile"):
-        query = query.where(opening.pos_profile == filters.pos_profile)
+        if frappe.db.has_column("POS Closing Shift", "pos_profile"):
+            query = query.where(closing.pos_profile == filters.pos_profile)
+        else:
+            query = query.where(opening.pos_profile == filters.pos_profile)
 
     return query.run(as_dict=True)
 
 
-def get_closing_totals(pos_closing_entry):
+def get_closing_totals(pos_closing_shift):
     child_table = get_closing_payment_child_table()
     if not child_table:
         return {"expected_amount": 0, "closing_amount": 0, "variance": 0}
@@ -227,16 +234,16 @@ def get_closing_totals(pos_closing_entry):
             {variance_expr} as variance
         from `tab{child_table}`
         where parent = %s
-            and parenttype = 'POS Closing Entry'
+            and parenttype = 'POS Closing Shift'
             and parentfield in ('payment_reconciliation', 'payment_reconciliations')
         """,
-        pos_closing_entry,
+        pos_closing_shift,
         as_dict=True,
     )
     return result[0] if result else {"expected_amount": 0, "closing_amount": 0, "variance": 0}
 
 
-def get_closing_payment_details(pos_closing_entry):
+def get_closing_payment_details(pos_closing_shift):
     child_table = get_closing_payment_child_table()
     if not child_table:
         return []
@@ -263,17 +270,17 @@ def get_closing_payment_details(pos_closing_entry):
         select {", ".join(select_fields)}
         from `tab{child_table}`
         where parent = %s
-            and parenttype = 'POS Closing Entry'
+            and parenttype = 'POS Closing Shift'
             and parentfield in ('payment_reconciliation', 'payment_reconciliations')
         order by idx
         """,
-        pos_closing_entry,
+        pos_closing_shift,
         as_dict=True,
     )
 
 
 def get_closing_payment_child_table():
-    meta = frappe.get_meta("POS Closing Entry")
+    meta = frappe.get_meta("POS Closing Shift")
     for fieldname in ("payment_reconciliation", "payment_reconciliations"):
         df = meta.get_field(fieldname)
         if df and df.options:

@@ -3,6 +3,7 @@ from frappe import _
 
 
 APP_SETTINGS_DOCTYPE = "ProcessEdge POSNext Settings"
+POS_OPENING_SHIFT_DOCTYPE = "POS Opening Shift"
 
 
 def get_app_settings_doc():
@@ -31,15 +32,15 @@ def is_global_rate_editing_enabled():
 
 def get_current_pos_profile(user=None):
     user = user or frappe.session.user
-    if not user or user == "Guest" or not frappe.db.exists("DocType", "POS Opening Entry"):
+    if not user or user == "Guest" or not frappe.db.exists("DocType", POS_OPENING_SHIFT_DOCTYPE):
         return None
 
     fields = ["pos_profile"]
     order_by = "modified desc"
 
-    if frappe.db.has_column("POS Opening Entry", "status"):
+    if frappe.db.has_column(POS_OPENING_SHIFT_DOCTYPE, "status"):
         entries = frappe.get_all(
-            "POS Opening Entry",
+            POS_OPENING_SHIFT_DOCTYPE,
             filters={"user": user, "status": "Open"},
             fields=fields,
             order_by=order_by,
@@ -48,9 +49,9 @@ def get_current_pos_profile(user=None):
         if entries and entries[0].get("pos_profile"):
             return entries[0].get("pos_profile")
 
-    if frappe.db.has_column("POS Opening Entry", "docstatus"):
+    if frappe.db.has_column(POS_OPENING_SHIFT_DOCTYPE, "docstatus"):
         entries = frappe.get_all(
-            "POS Opening Entry",
+            POS_OPENING_SHIFT_DOCTYPE,
             filters={"user": user, "docstatus": 1},
             fields=fields,
             order_by=order_by,
@@ -60,7 +61,7 @@ def get_current_pos_profile(user=None):
             return entries[0].get("pos_profile")
 
     entries = frappe.get_all(
-        "POS Opening Entry",
+        POS_OPENING_SHIFT_DOCTYPE,
         filters={"user": user},
         fields=fields,
         order_by=order_by,
