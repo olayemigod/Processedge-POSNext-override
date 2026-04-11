@@ -24,3 +24,6 @@ include = ["processedge_posnext_override*"]
 
 [tool.setuptools.package-data]
 processedge_posnext_override = ["**/*.json", "**/*.js", "**/*.html", "**/*.css", "**/*.md", "**/*.txt"]
+
+[tool.bench.frappe-dependencies]
+frappe = ">=16.0.0,<17.0.0"
