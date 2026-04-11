@@ -1,6 +1,6 @@
 import frappe
 from frappe import _
-from frappe.utils import flt, getdate
+from frappe.utils import flt, get_datetime, getdate
 
 
 def execute(filters=None):
@@ -30,6 +30,8 @@ def get_columns():
         {"label": _("Type"), "fieldname": "row_type", "fieldtype": "Data", "width": 150},
         {"label": _("Source"), "fieldname": "source", "fieldtype": "Data", "width": 180},
         {"label": _("Date"), "fieldname": "posting_date", "fieldtype": "Date", "width": 110},
+        {"label": _("Shift Start"), "fieldname": "shift_start", "fieldtype": "Datetime", "width": 160},
+        {"label": _("Shift End"), "fieldname": "shift_end", "fieldtype": "Datetime", "width": 160},
         {"label": _("POS Closing Shift"), "fieldname": "pos_closing_shift", "fieldtype": "Link", "options": "POS Closing Shift", "width": 190},
         {"label": _("POS Profile"), "fieldname": "pos_profile", "fieldtype": "Link", "options": "POS Profile", "width": 170},
         {"label": _("Business Location"), "fieldname": "business_location", "fieldtype": "Data", "width": 170},
@@ -48,11 +50,13 @@ def get_columns():
         {"label": _("Voucher Type"), "fieldname": "voucher_type", "fieldtype": "Data", "width": 150},
         {"label": _("Voucher"), "fieldname": "voucher_no", "fieldtype": "Dynamic Link", "options": "voucher_type", "width": 190},
         {"label": _("Expense Account"), "fieldname": "expense_account", "fieldtype": "Link", "options": "Account", "width": 220},
+        {"label": _("Expense Created At"), "fieldname": "expense_created_at", "fieldtype": "Datetime", "width": 170},
     ]
 
 
 def get_data(filters):
     entries = get_closing_entries(filters)
+    expense_details_by_entry = get_assigned_expense_details(entries, filters)
     rows = []
 
     for entry in entries:
@@ -60,12 +64,8 @@ def get_data(filters):
         variance = flt(totals.get("variance"))
         shortage = abs(variance) if variance < 0 else 0
         cost_center = filters.get("cost_center") or get_pos_profile_cost_center(entry.pos_profile)
-        expenses = get_expenses(
-            posting_date=entry.posting_date,
-            company=entry.company,
-            cost_center=cost_center,
-            include_cogs=filters.get("include_cogs"),
-        )
+        entry_expenses = expense_details_by_entry.get(entry.name, [])
+        expenses = sum(flt(expense.get("amount")) for expense in entry_expenses)
 
         parent_row = f"closing::{entry.name}"
         base_row = {
@@ -74,6 +74,8 @@ def get_data(filters):
             "source": entry.name,
             "indent": 0,
             "posting_date": entry.posting_date,
+            "shift_start": entry.get("shift_start"),
+            "shift_end": entry.get("shift_end"),
             "pos_closing_shift": entry.name,
             "pos_profile": entry.pos_profile,
             "business_location": get_business_location(entry.pos_profile, cost_center),
@@ -91,7 +93,14 @@ def get_data(filters):
         }
         rows.append(base_row)
         rows.extend(get_payment_detail_rows(entry, parent_row))
-        rows.extend(get_expense_detail_rows(entry, parent_row, cost_center, include_cogs=filters.get("include_cogs")))
+        rows.extend(
+            get_expense_detail_rows(
+                entry,
+                parent_row,
+                cost_center,
+                entry_expenses,
+            )
+        )
 
     return rows
 
@@ -108,6 +117,8 @@ def get_payment_detail_rows(entry, parent_row):
                 "row_type": _("Variance Source"),
                 "source": payment.get("mode_of_payment") or _("Payment Row"),
                 "posting_date": entry.posting_date,
+                "shift_start": entry.get("shift_start"),
+                "shift_end": entry.get("shift_end"),
                 "pos_closing_shift": entry.name,
                 "pos_profile": entry.pos_profile,
                 "company": entry.company,
@@ -124,17 +135,9 @@ def get_payment_detail_rows(entry, parent_row):
     return rows
 
 
-def get_expense_detail_rows(entry, parent_row, cost_center, include_cogs=False):
+def get_expense_detail_rows(entry, parent_row, cost_center, expense_details):
     rows = []
-    for idx, expense in enumerate(
-        get_expense_details(
-            posting_date=entry.posting_date,
-            company=entry.company,
-            cost_center=cost_center,
-            include_cogs=include_cogs,
-        ),
-        start=1,
-    ):
+    for idx, expense in enumerate(expense_details, start=1):
         rows.append(
             {
                 "row_id": f"{parent_row}::expense::{idx}",
@@ -143,6 +146,8 @@ def get_expense_detail_rows(entry, parent_row, cost_center, include_cogs=False):
                 "row_type": _("Expense Source"),
                 "source": expense.get("voucher_no") or expense.get("account"),
                 "posting_date": entry.posting_date,
+                "shift_start": entry.get("shift_start"),
+                "shift_end": entry.get("shift_end"),
                 "pos_closing_shift": entry.name,
                 "pos_profile": entry.pos_profile,
                 "company": entry.company,
@@ -152,6 +157,7 @@ def get_expense_detail_rows(entry, parent_row, cost_center, include_cogs=False):
                 "voucher_type": expense.get("voucher_type"),
                 "voucher_no": expense.get("voucher_no"),
                 "expense_account": expense.get("account"),
+                "expense_created_at": expense.get("expense_created_at"),
             }
         )
 
@@ -165,6 +171,8 @@ def get_closing_entries(filters):
     closing_date_field = get_existing_column("POS Closing Shift", ["posting_date", "period_end_date", "closing_date", "modified"])
     user_field = get_existing_column("POS Closing Shift", ["user", "owner"])
     company_field = get_existing_column("POS Closing Shift", ["company"])
+    shift_start_field = get_existing_column("POS Closing Shift", ["period_start_date"])
+    shift_end_field = get_existing_column("POS Closing Shift", ["period_end_date"])
 
     query = (
         frappe.qb.from_(closing)
@@ -192,6 +200,16 @@ def get_closing_entries(filters):
     else:
         query = query.select(opening.pos_profile)
 
+    if shift_start_field:
+        query = query.select(closing[shift_start_field].as_("shift_start"))
+    else:
+        query = query.select(opening.period_start_date.as_("shift_start"))
+
+    if shift_end_field:
+        query = query.select(closing[shift_end_field].as_("shift_end"))
+    else:
+        query = query.select(opening.period_end_date.as_("shift_end"))
+
     if filters.get("company"):
         if company_field:
             query = query.where(closing[company_field] == filters.company)
@@ -205,6 +223,67 @@ def get_closing_entries(filters):
             query = query.where(opening.pos_profile == filters.pos_profile)
 
     return query.run(as_dict=True)
+
+
+def get_assigned_expense_details(entries, filters):
+    grouped_entries = {}
+    assigned = {entry.name: [] for entry in entries}
+
+    for entry in entries:
+        cost_center = filters.get("cost_center") or get_pos_profile_cost_center(entry.pos_profile)
+        key = (str(entry.posting_date), entry.company, cost_center)
+        grouped_entries.setdefault(key, []).append(entry)
+
+    for (posting_date, company, cost_center), shift_entries in grouped_entries.items():
+        shift_entries = sorted(
+            shift_entries,
+            key=lambda entry: (
+                get_datetime(entry.get("shift_start")) or get_datetime(entry.posting_date),
+                get_datetime(entry.get("shift_end")) or get_datetime(entry.posting_date),
+                entry.name,
+            ),
+        )
+        expense_details = get_expense_details(
+            posting_date=posting_date,
+            company=company,
+            cost_center=cost_center,
+            include_cogs=filters.get("include_cogs"),
+        )
+
+        for expense in expense_details:
+            entry = get_expense_shift(expense, shift_entries)
+            if entry:
+                assigned.setdefault(entry.name, []).append(expense)
+
+    return assigned
+
+
+def get_expense_shift(expense, shift_entries):
+    if not shift_entries:
+        return None
+
+    expense_created_at = get_datetime(expense.get("expense_created_at"))
+    if not expense_created_at:
+        return shift_entries[-1]
+
+    for entry in shift_entries:
+        shift_start = get_datetime(entry.get("shift_start"))
+        shift_end = get_datetime(entry.get("shift_end"))
+        if shift_start and shift_end and shift_start <= expense_created_at <= shift_end:
+            return entry
+
+    return min(
+        shift_entries,
+        key=lambda entry: abs((get_shift_reference_time(entry) - expense_created_at).total_seconds()),
+    )
+
+
+def get_shift_reference_time(entry):
+    return (
+        get_datetime(entry.get("shift_end"))
+        or get_datetime(entry.get("shift_start"))
+        or get_datetime(entry.posting_date)
+    )
 
 
 def get_closing_totals(pos_closing_shift):
@@ -335,7 +414,12 @@ def get_expenses(posting_date, company=None, cost_center=None, include_cogs=Fals
     return flt(result[0].amount if result else 0)
 
 
-def get_expense_details(posting_date, company=None, cost_center=None, include_cogs=False):
+def get_expense_details(
+    posting_date,
+    company=None,
+    cost_center=None,
+    include_cogs=False,
+):
     conditions = get_expense_conditions(include_cogs=include_cogs)
     values = {"posting_date": posting_date}
 
@@ -355,6 +439,7 @@ def get_expense_details(posting_date, company=None, cost_center=None, include_co
             gle.voucher_no,
             gle.account,
             gle.cost_center,
+            min(gle.creation) as expense_created_at,
             sum(coalesce(gle.debit, 0) - coalesce(gle.credit, 0)) as amount
         from `tabGL Entry` gle
         inner join `tabAccount` account on account.name = gle.account
